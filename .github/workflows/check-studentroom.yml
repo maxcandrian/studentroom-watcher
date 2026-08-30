@@ -1,0 +1,39 @@
+name: Studentroom Zimmer-Check
+
+on:
+  schedule:
+    # GitHub-Cron laeuft in UTC ohne Sommer-/Winterzeit.
+    # 16:00 UTC = 18:00 Europe/Zurich (Sommerzeit) bzw. 17:00 (Winterzeit).
+    - cron: "0 16 * * *"
+  workflow_dispatch: {}
+
+# Nur ein Lauf gleichzeitig.
+concurrency:
+  group: studentroom-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Abhaengigkeiten installieren
+        run: pip install -r requirements.txt
+
+      - name: Zimmer pruefen
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MAX_PRICE: "900"
+          # Beim manuellen Start immer eine Nachricht senden (Test),
+          # beim geplanten Lauf nur bei einem Treffer.
+          ALWAYS_NOTIFY: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+        run: python check_studentroom.py

@@ -9,3 +9,6 @@ venv/
 
 # lokale Test-/Zwischendateien
 *.html
+
+# Zustandsspeicher (Wiederhol-Schutz, wird via Actions-Cache gehalten)
+state/

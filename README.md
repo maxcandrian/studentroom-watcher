@@ -16,9 +16,14 @@ zum manuellen Prüfen; die Miete wird nur als Info mit angezeigt.
   **kein Browser/Playwright nötig**.
 - Der GitHub-Actions-Workflow
   [`.github/workflows/check-studentroom.yml`](.github/workflows/check-studentroom.yml)
-  führt das Skript täglich zeitgesteuert aus.
+  führt das Skript **alle 5 Minuten** aus.
 - Sobald **irgendein freies** Zimmer existiert, wird eine Telegram-Nachricht
   gesendet (beim manuellen Start immer eine Nachricht = Test).
+- **Wiederhol-Schutz:** Ein Zimmer wird nur **einmal** gemeldet (wenn es neu
+  frei wird), nicht bei jeder Prüfung. Der zuletzt gemeldete Stand wird über den
+  GitHub-Actions-Cache gehalten (`STATE_FILE`). So gibt es kein Spam.
+- Der Bot läuft komplett auf GitHubs Servern – **kein Akku-/Datenverbrauch auf
+  dem Handy**, das empfängt nur die Telegram-Nachricht.
 
 ## Einrichtung
 
@@ -46,16 +51,20 @@ Repo → **Actions → „Studentroom Zimmer-Check" → Run workflow**.
 Beim manuellen Lauf wird immer eine Telegram-Nachricht gesendet (auch wenn
 gerade keine Zimmer frei sind) – so siehst du, dass alles funktioniert.
 
-## Zeitplan
+## Zeitplan & Zuverlässigkeit
 
-`cron: "0 16 * * *"` (UTC). GitHub-Cron kennt keine Sommer-/Winterzeit:
+`cron: "*/5 * * * *"` – Prüfung **alle 5 Minuten** (Minimum bei GitHub).
+Bei einem freien Zimmer kommt die Meldung also typischerweise innerhalb von
+**~5–15 Minuten**. Hinweise:
 
-- **Sommerzeit** (CEST): 16:00 UTC = **18:00** Europe/Zurich
-- **Winterzeit** (CET): 16:00 UTC = **17:00** Europe/Zurich
-
-Für exakt 18:00 ganzjährig kann man eine zweite Cron-Zeile `0 17 * * *`
-ergänzen. Hinweis: geplante GitHub-Actions-Läufe können sich um einige Minuten
-verzögern.
+- GitHub-Cron ist **nicht sekundengenau**; bei hoher Last können Läufe sich um
+  einige Minuten verschieben. Es gibt keine echte Push-/Sofort-Benachrichtigung,
+  weil die Website keine API dafür anbietet – jede Lösung muss regelmäßig pollen.
+- Häufiges Pollen verbraucht auf **öffentlichen** Repos **keine** Actions-Minuten
+  (unbegrenzt gratis). Bei privaten Repos würde es das Gratis-Kontingent sprengen.
+- [`.github/workflows/keepalive.yml`](.github/workflows/keepalive.yml) macht 1×
+  im Monat einen leeren Commit, damit GitHub den Zeitplan nicht nach 60 Tagen
+  Inaktivität pausiert.
 
 ## Lokal ausführen
 

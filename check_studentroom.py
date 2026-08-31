@@ -43,6 +43,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import json
 import html as htmllib
 
 import requests
@@ -350,6 +351,37 @@ def selftest() -> int:
     return 0 if ok else 1
 
 
+# --- Zustand / Wiederhol-Schutz ---------------------------------------------
+# Damit bei haeufiger Pruefung (z.B. alle 5 Min) nicht bei JEDEM Lauf eine
+# Nachricht kommt, merken wir uns den zuletzt gemeldeten Stand. Es wird nur
+# gesendet, wenn sich etwas Meldenswertes geaendert hat (ein Zimmer NEU frei
+# wird oder eine neue Warnung auftritt). Der Stand wird zwischen den Laeufen
+# ueber den GitHub-Actions-Cache erhalten (siehe Workflow, STATE_FILE).
+
+def signature(hits, anomalies) -> dict:
+    free_keys = sorted(
+        f"{name}|{r['zimmer']}|{r['wg']}|{r['bezug']}|{r['price_text']}"
+        for name, r in hits
+    )
+    return {"free": free_keys, "anom": sorted(anomalies)}
+
+
+def load_state(path):
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def save_state(path, sig) -> None:
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(sig, fh, ensure_ascii=False)
+
+
 # --- Einstieg ---------------------------------------------------------------
 
 def main(argv) -> int:
@@ -358,6 +390,7 @@ def main(argv) -> int:
 
     dry_run = "--dry-run" in argv
     always_notify = os.environ.get("ALWAYS_NOTIFY", "").lower() in ("1", "true", "yes")
+    state_file = os.environ.get("STATE_FILE")
 
     hits, summary_lines, anomalies = evaluate()
 
@@ -367,9 +400,20 @@ def main(argv) -> int:
     for a in anomalies:
         print("  ! " + a)
 
-    should_notify = bool(hits) or bool(anomalies) or always_notify
+    has_report = bool(hits) or bool(anomalies)
+    sig = signature(hits, anomalies)
+
+    # Wiederhol-Schutz: nur senden, wenn sich der meldenswerte Stand aenderte.
+    if state_file:
+        changed = load_state(state_file) != sig
+        save_state(state_file, sig)  # immer den aktuellen Stand sichern
+    else:
+        changed = True  # ohne Zustandsdatei (z.B. lokaler Lauf) wie bisher
+
+    should_notify = always_notify or (has_report and changed)
     if not should_notify:
-        print("Nichts zu melden – keine Nachricht gesendet.")
+        reason = "nichts frei" if not has_report else "bereits gemeldet"
+        print(f"Nichts Neues zu melden ({reason}) – keine Nachricht gesendet.")
         return 0
 
     message = build_message(hits, summary_lines, anomalies)

@@ -5,6 +5,9 @@ on:
     # Alle 5 Minuten (Minimum bei GitHub). Zeiten sind UTC und nicht
     # sekundengenau – Laeufe koennen sich bei Last um einige Minuten verschieben.
     - cron: "*/5 * * * *"
+    # 2x/Woche Status-Update (Mo & Do, 07:02 UTC = 09:02 Europe/Zurich Sommer).
+    # Minute 2 gewaehlt, damit sich dieser Lauf nicht mit dem 5-Minuten-Takt ueberschneidet.
+    - cron: "2 7 * * 1,4"
   workflow_dispatch: {}
 
 # Nur ein Lauf gleichzeitig (verhindert Ueberschneidungen bei kurzer Verzoegerung).
@@ -41,9 +44,11 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           STATE_FILE: state/seen.json
-          # Beim manuellen Start immer eine Nachricht senden (Test),
-          # beim geplanten Lauf nur bei einer Aenderung (neues freies Zimmer).
-          ALWAYS_NOTIFY: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          # Immer senden bei: manuellem Start (Test) ODER dem 2x/Woche-Status-Lauf.
+          # Sonst (5-Minuten-Takt) nur bei einer Aenderung (neues freies Zimmer).
+          ALWAYS_NOTIFY: ${{ (github.event_name == 'workflow_dispatch' || github.event.schedule == '2 7 * * 1,4') && '1' || '0' }}
+          # Kopfzeile der Nachricht je nach Ausloeser.
+          STATUS_NOTE: ${{ github.event_name == 'workflow_dispatch' && '🧪 Testnachricht (manuell ausgelöst)' || (github.event.schedule == '2 7 * * 1,4' && '🟢 Regelmäßiger Status (Mo & Do) – der Bot läuft. Zahlen kannst du unten selbst vergleichen.' || '') }}
         run: python check_studentroom.py
 
       # Aktuellen Stand fuer den naechsten Lauf sichern.

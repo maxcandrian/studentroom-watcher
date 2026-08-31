@@ -22,6 +22,9 @@ zum manuellen Prüfen; die Miete wird nur als Info mit angezeigt.
 - **Wiederhol-Schutz:** Ein Zimmer wird nur **einmal** gemeldet (wenn es neu
   frei wird), nicht bei jeder Prüfung. Der zuletzt gemeldete Stand wird über den
   GitHub-Actions-Cache gehalten (`STATE_FILE`). So gibt es kein Spam.
+- **Status-Update 2×/Woche** (Mo & Do, ~09:00): Kontroll-Nachricht auch ohne
+  freie Zimmer – als Lebenszeichen und zum manuellen Nachprüfen (mit Zählern
+  frei / reserviert / vermietet pro Standort und Website-Link).
 - Der Bot läuft komplett auf GitHubs Servern – **kein Akku-/Datenverbrauch auf
   dem Handy**, das empfängt nur die Telegram-Nachricht.
 

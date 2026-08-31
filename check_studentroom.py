@@ -159,6 +159,8 @@ def evaluate():
 
         rooms, list_is_empty = parse_rooms(page_html)
         free = [r for r in rooms if r["status"] == "frei"]
+        n_res = sum(1 for r in rooms if r["status"] == "reserviert")
+        n_ver = sum(1 for r in rooms if r["status"] == "vermietet")
 
         for r in free:
             hits.append((name, r))
@@ -173,9 +175,13 @@ def evaluate():
             )
 
         if free:
-            summary_lines.append(f"{name}: ✅ {len(free)} freie(s) Zimmer")
+            line = f"{name}: ✅ {len(free)} freie(s) Zimmer"
         else:
-            summary_lines.append(f"{name}: keine freien Zimmer")
+            line = f"{name}: keine freien Zimmer"
+        # Zaehler zum Selbst-Abgleich mit der Website (nur wenn Zeilen da sind).
+        if rooms:
+            line += f" ({len(free)} frei · {n_res} reserviert · {n_ver} vermietet)"
+        summary_lines.append(line)
 
     return hits, summary_lines, anomalies
 
@@ -417,6 +423,11 @@ def main(argv) -> int:
         return 0
 
     message = build_message(hits, summary_lines, anomalies)
+
+    # Optionale Kopfzeile (z.B. fuer das 2x/Woche-Status-Update oder den Test).
+    note = os.environ.get("STATUS_NOTE", "").strip()
+    if note:
+        message = htmllib.escape(note) + "\n\n" + message
 
     if dry_run or not (os.environ.get("TELEGRAM_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID")):
         print("\n--- Nachricht (nicht gesendet) ---\n" + message)

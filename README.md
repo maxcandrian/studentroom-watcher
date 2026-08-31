@@ -3,7 +3,8 @@
 Automatischer Bot, der jeden Abend die Angebotsseiten der **Student Mentor
 Foundation Lucerne** auf [studentroom.ch](https://www.studentroom.ch) prüft
 (Standorte **Eichhof** und **Schweighof**) und per **Telegram** benachrichtigt,
-sobald ein Zimmer **frei** wird und die Miete **≤ CHF 900** beträgt.
+sobald **ein Zimmer frei** wird. Die Nachricht enthält den **Link zur Website**
+zum manuellen Prüfen; die Miete wird nur als Info mit angezeigt.
 
 ## Wie es funktioniert
 
@@ -16,8 +17,8 @@ sobald ein Zimmer **frei** wird und die Miete **≤ CHF 900** beträgt.
 - Der GitHub-Actions-Workflow
   [`.github/workflows/check-studentroom.yml`](.github/workflows/check-studentroom.yml)
   führt das Skript täglich zeitgesteuert aus.
-- Nur wenn ein **freies** Zimmer **≤ CHF 900** existiert, wird eine
-  Telegram-Nachricht gesendet (beim manuellen Start immer eine Nachricht = Test).
+- Sobald **irgendein freies** Zimmer existiert, wird eine Telegram-Nachricht
+  gesendet (beim manuellen Start immer eine Nachricht = Test).
 
 ## Einrichtung
 
@@ -72,7 +73,6 @@ venv/bin/python check_studentroom.py --dry-run    # Live-Check ohne Versand
 
 | Variable           | Default | Bedeutung                                        |
 | ------------------ | ------- | ------------------------------------------------ |
-| `MAX_PRICE`        | `900`   | Maximalmiete in CHF                              |
 | `ALWAYS_NOTIFY`    | –       | `1` → auch ohne Treffer senden (manueller Test)  |
 | `TELEGRAM_TOKEN`   | –       | Bot-Token                                        |
 | `TELEGRAM_CHAT_ID` | –       | Ziel-Chat-ID                                     |

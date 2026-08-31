@@ -32,7 +32,6 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MAX_PRICE: "900"
           # Beim manuellen Start immer eine Nachricht senden (Test),
           # beim geplanten Lauf nur bei einem Treffer.
           ALWAYS_NOTIFY: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}

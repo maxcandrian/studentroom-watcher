@@ -31,9 +31,11 @@ Umgebungsvariablen
 ------------------
     TELEGRAM_TOKEN     Bot-Token von @BotFather        (fuer Versand noetig)
     TELEGRAM_CHAT_ID   Ziel-Chat-ID                    (fuer Versand noetig)
-    MAX_PRICE          Maximalmiete in CHF, Default 900
     ALWAYS_NOTIFY      "1"/"true" -> auch eine Nachricht senden, wenn nichts
                        gefunden wurde (fuer den manuellen Test-Lauf)
+
+Gemeldet wird, sobald ueberhaupt ein Zimmer frei ist (unabhaengig vom Preis);
+die Miete wird nur als Info angezeigt. Zum Pruefen dient der Link zur Website.
 """
 
 from __future__ import annotations
@@ -68,8 +70,6 @@ USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 studentroom-watcher"
 )
-
-MAX_PRICE = int(os.environ.get("MAX_PRICE", "900"))
 
 
 # --- HTTP / Parsing ---------------------------------------------------------
@@ -140,7 +140,7 @@ def evaluate():
     """Ruft alle Standorte ab und wertet aus.
 
     Rueckgabe: (hits, summary_lines, anomalies)
-      hits      : Liste (location, room) fuer freie Zimmer <= MAX_PRICE
+      hits      : Liste (location, room) fuer JEDES freie Zimmer (ohne Preisfilter)
       summary   : Zusammenfassungszeilen pro Standort (fuer den Test-Lauf)
       anomalies : Liste von Fehler-/Warntexten (Abruffehler, Struktur-Aenderung)
     """
@@ -158,10 +158,8 @@ def evaluate():
 
         rooms, list_is_empty = parse_rooms(page_html)
         free = [r for r in rooms if r["status"] == "frei"]
-        # Preis unbekannt -> sicherheitshalber melden (lieber ein Treffer zu viel).
-        free_budget = [r for r in free if r["price"] is None or r["price"] <= MAX_PRICE]
 
-        for r in free_budget:
+        for r in free:
             hits.append((name, r))
 
         # Struktur-Warnung: keine erkannten Zimmerzeilen UND keine bekannte
@@ -173,40 +171,54 @@ def evaluate():
                 f"Bitte {url} manuell pruefen (evtl. Skript anpassen)."
             )
 
-        if free_budget:
-            summary_lines.append(f"{name}: ✅ {len(free_budget)} freie(s) Zimmer ≤ CHF {MAX_PRICE}")
-        elif free:
-            summary_lines.append(f"{name}: freie Zimmer nur ueber CHF {MAX_PRICE}")
+        if free:
+            summary_lines.append(f"{name}: ✅ {len(free)} freie(s) Zimmer")
         else:
             summary_lines.append(f"{name}: keine freien Zimmer")
 
     return hits, summary_lines, anomalies
 
 
+LINKS_LINE = (
+    "\U0001f517 <a href=\"https://www.studentroom.ch/angebot-eichhof\">Eichhof</a> · "
+    "<a href=\"https://www.studentroom.ch/angebot-schweighof\">Schweighof</a>"
+)
+
+
 def build_message(hits, summary_lines, anomalies) -> str:
     parts = []
     if hits:
-        parts.append(f"\U0001f3e0 <b>Freies Zimmer gefunden</b> (≤ CHF {MAX_PRICE})!\n")
+        parts.append("\U0001f3e0 <b>Freie Zimmer verfuegbar!</b>\n")
+        # Treffer pro Standort gruppieren.
+        by_loc = {}
         for name, r in hits:
-            price = f"CHF {r['price']}" if r["price"] is not None else (r["price_text"] or "Preis unklar")
-            details = " · ".join(
-                p for p in [
-                    f"Zimmer {r['zimmer']}" if r["zimmer"] else "",
-                    r["wg"],
-                    price,
-                    f"Bezug {r['bezug']}" if r["bezug"] else "",
-                ] if p
-            )
-            parts.append(f"• <b>{name}</b>: {htmllib.escape(details)}")
+            by_loc.setdefault(name, []).append(r)
+        for name in LOCATIONS:
+            rooms = by_loc.get(name)
+            if rooms:
+                parts.append(f"<b>{name}</b> – {len(rooms)} frei:")
+                for r in rooms:
+                    price = f"CHF {r['price']}" if r["price"] is not None else (r["price_text"] or "Preis unklar")
+                    details = " · ".join(
+                        p for p in [
+                            f"Zimmer {r['zimmer']}" if r["zimmer"] else "",
+                            r["wg"],
+                            price,
+                            f"Bezug {r['bezug']}" if r["bezug"] else "",
+                        ] if p
+                    )
+                    parts.append(f" • {htmllib.escape(details)}")
+            else:
+                parts.append(f"<b>{name}</b>: keine freien Zimmer")
         parts.append("")
-        parts.append(
-            "\U0001f517 <a href=\"https://www.studentroom.ch/angebot-eichhof\">Eichhof</a> | "
-            "<a href=\"https://www.studentroom.ch/angebot-schweighof\">Schweighof</a>"
-        )
+        parts.append("\U0001f449 Jetzt selbst pruefen:")
+        parts.append(LINKS_LINE)
     else:
-        parts.append(f"ℹ️ Aktuell keine freien Zimmer ≤ CHF {MAX_PRICE}.")
+        parts.append("ℹ️ Aktuell keine freien Zimmer.")
         parts.append("")
         parts.extend(summary_lines)
+        parts.append("")
+        parts.append(LINKS_LINE)
 
     if anomalies:
         parts.append("")
@@ -304,15 +316,13 @@ def selftest() -> int:
 
     rooms, empty = parse_rooms(SELFTEST_HTML)
     free = [r for r in rooms if r["status"] == "frei"]
-    free_budget = [r for r in free if r["price"] is not None and r["price"] <= MAX_PRICE]
+    prices = sorted(r["price"] for r in free)
 
     checks = [
         ("Zeilen erkannt (4)", len(rooms) == 4),
         ("Freie Zimmer erkannt (2)", len(free) == 2),
-        ("Freie Zimmer <= 900 (1)", len(free_budget) == 1),
-        ("Treffer ist das 640er-Zimmer", free_budget and free_budget[0]["price"] == 640),
-        ("640er-Zimmer-Nr 'A 12'", free_budget and free_budget[0]["zimmer"] == "A 12"),
-        ("935er-Zimmer korrekt ausgeschlossen", all(r["price"] != 935 for r in free_budget)),
+        ("Beide freien Zimmer sind Treffer (640 & 935)", prices == [640, 935]),
+        ("Zimmer-Nr des 640er 'A 12'", any(r["zimmer"] == "A 12" for r in free if r["price"] == 640)),
         ("Reserviert nicht als frei", all(r["status"] != "frei" for r in rooms if r["price"] == 580)),
         ("Vermietet nicht als frei", all(r["status"] != "frei" for r in rooms if r["price"] == 550)),
         ("Fixture nicht als 'leer' erkannt", empty is False),
@@ -334,7 +344,7 @@ def selftest() -> int:
 
     print()
     print("Beispiel-Nachricht bei Treffer:")
-    hits = [("Eichhof", r) for r in free_budget]
+    hits = [("Eichhof", r) for r in free]
     print(build_message(hits, [], []))
     print()
     return 0 if ok else 1
